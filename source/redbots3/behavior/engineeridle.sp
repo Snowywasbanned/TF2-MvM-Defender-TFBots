@@ -396,8 +396,15 @@ static void CTFBotMvMEngineerIdle_ResetProperties(int actor)
 
 bool CTFBotMvMEngineerIdle_ShouldAdvanceNestSpot(int actor)
 {
+	m_aNestArea[actor] = PickBuildArea(actor);
+
+	// ADD THIS CHECK:
 	if (m_aNestArea[actor] == NULL_AREA)
-		return false;
+	{
+	    PrintToServer("Engineer %N failed to find a valid nest area!", actor);
+	    // Either return action.Done() or have a fallback behavior
+	    return action.Continue();
+	}
 	
 	if (m_ctAdvanceNestSpot[actor] <= 0.0)
 	{
