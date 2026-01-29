@@ -403,7 +403,7 @@ bool CTFBotMvMEngineerIdle_ShouldAdvanceNestSpot(int actor)
 	{
 	    PrintToServer("Engineer %N failed to find a valid nest area!", actor);
 	    // Either return action.Done() or have a fallback behavior
-	    return action.Continue();
+	    return false;
 	}
 	
 	if (m_ctAdvanceNestSpot[actor] <= 0.0)
