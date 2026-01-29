@@ -6,10 +6,7 @@ on:
       - main
     paths:
       - car.txt
-
   workflow_dispatch:
-
-
 
 env:
   PLUGIN_NAME: tf2_defenderbots
@@ -22,26 +19,26 @@ jobs:
         sm-version: [ '1.12.7164', '1.13.7166' ]
     permissions:
       contents: write
-
+    
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Set environment variables
         run: echo SCRIPTS_PATH=$(pwd) >> $GITHUB_ENV
-
+      
       - name: Setup SourcePawn Compiler ${{ matrix.sm-version }}
         id: setup_sp
         uses: rumblefrog/setup-sp@master
         with:
           version: ${{ matrix.sm-version }}
           version-file: ./source/${{ env.PLUGIN_NAME }}.sp
-
+      
       - name: Download the includes downloader
         uses: tsuza/SPDependy@v2
         with:
           github_token: "${{ secrets.GITHUB_TOKEN }}"
           output_directory: "${{ env.SCRIPTS_PATH }}/source/include"
-
+      
       - name: Compile plugins
         run: |
           mkdir ../plugins
@@ -51,23 +48,30 @@ jobs:
           echo "===VERSION==="
           echo ${{ steps.setup_sp.outputs.plugin-version }}
         working-directory: ${{ env.SCRIPTS_PATH }}/source
-
+      
       - name: Install zip
         uses: montudor/action-zip@v1
-
+      
       - name: Zip output
         run: |
           zip -qq -y -r ${{ github.event.repository.name }}-sm${{ matrix.sm-version }}.zip configs gamedata plugins
         working-directory: ${{ env.SCRIPTS_PATH }}
-
+      
       - name: List files in the directory
         run: ls -R
         working-directory: ${{ env.SCRIPTS_PATH }}
-
+      
       - name: List files in the zip
         run: unzip -l ${{ github.event.repository.name }}-sm${{ matrix.sm-version }}.zip
         working-directory: ${{ env.SCRIPTS_PATH }}
-
+      
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-sm${{ matrix.sm-version }}
+          path: ${{ github.event.repository.name }}-sm${{ matrix.sm-version }}.zip
+          retention-days: 90
+      
       - name: Create Release
         uses: ncipollo/release-action@v1
         env:
