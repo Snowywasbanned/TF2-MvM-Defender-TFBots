@@ -1532,7 +1532,7 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 	while ((hint = FindEntityByClassname(hint, "obj_sentrygun_hint")) != -1)
 	{
 		float hintPos[3];
-		GetAbsOrigin(hint, hintPos);
+		hintPos = GetAbsOrigin(hint);
 		hintPositions.PushArray(hintPos);
 	}
 	
@@ -1545,7 +1545,7 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 		if (hintTeam == 2 || hintTeam == 0) // 0 = any team, 2 = red team
 		{
 			float hintPos[3];
-			GetAbsOrigin(tfbotHint, hintPos);
+			hintPos = GetAbsOrigin(tfbotHint);
 			hintPositions.PushArray(hintPos);
 		}
 	}
