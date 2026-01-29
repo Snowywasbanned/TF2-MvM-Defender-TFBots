@@ -3,11 +3,13 @@ name: Compile and release
 on:
   push:
     branches:
-      main
+      - main
     paths:
-      car.txt
+      - car.txt
 
-workflow_dispatch:
+  workflow_dispatch:
+
+
 
 env:
   PLUGIN_NAME: tf2_defenderbots
