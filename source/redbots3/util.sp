@@ -1617,6 +1617,107 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 	return randomArea;
 }
 
+CNavArea PickBuildAreaFallback(int client, float SearchRadius = 2000.0)
+{
+	int iAreaCount = TheNavAreas.Count;
+
+	//Check that this map has any nav areas
+	if (iAreaCount <= 0)
+		return NULL_AREA;
+	
+	float clientPos[3];
+	GetClientAbsOrigin(client, clientPos);
+	
+	// Try to find nav area near the client's position
+	CTFNavArea clientArea = TheNavMesh.GetNearestNavArea(clientPos, false, SearchRadius, false, true, TEAM_ANY);
+	
+	// If we found an area near the client, use it as a starting point
+	float searchOrigin[3];
+	if (clientArea != NULL_AREA)
+	{
+		clientArea.GetCenter(searchOrigin);
+	}
+	else
+	{
+		// Use client position as fallback
+		searchOrigin = clientPos;
+	}
+	
+	// Try to get bomb position as alternative search origin
+	BombInfo_t bombinfo;
+	if (GetBombInfo(bombinfo))
+	{
+		// Use bomb position if it's valid
+		float bombPos[3];
+		bombPos[0] = bombinfo.vPosition[0];
+		bombPos[1] = bombinfo.vPosition[1];
+		bombPos[2] = bombinfo.vPosition[2];
+		
+		CTFNavArea bombArea = TheNavMesh.GetNearestNavArea(bombPos, false, SearchRadius, false, true, TEAM_ANY);
+		if (bombArea != NULL_AREA)
+		{
+			bombArea.GetCenter(searchOrigin);
+		}
+	}
+	
+	ArrayList ValidAreas = new ArrayList();
+	
+	// Loop all nav areas and find valid ones (without requiring BOMB_DROP)
+	for (int i = 0; i < iAreaCount; i++)
+	{
+		CTFNavArea area = view_as<CTFNavArea>(TheNavAreas.Get(i));
+		
+		if (area == NULL_AREA)
+			continue;
+		
+		// Skip spawn areas
+		if (area.HasAttributeTF(BLUE_SPAWN_ROOM) || area.HasAttributeTF(RED_SPAWN_ROOM))
+			continue;
+		
+		// Skip blocked areas
+		if (area.HasAttributeTF(BLOCKED))
+			continue;
+		
+		if (area.HasAttributeTF(BLOCKED_AFTER_POINT_CAPTURE))
+			continue;
+		
+		if (area.HasAttributeTF(BLOCKED_UNTIL_POINT_CAPTURE))
+			continue;
+		
+		float areaCenter[3];
+		area.GetCenter(areaCenter);
+		
+		// Check if area is within search radius
+		float flDistance = GetVectorDistance(areaCenter, searchOrigin);
+		if (flDistance > SearchRadius)
+			continue;
+		
+		// Check if area is reachable (has valid travel distance)
+		float m_flBombTargetDistance = GetTravelDistanceToBombTarget(area);
+		if (m_flBombTargetDistance <= 0.0)
+			continue;
+		
+		ValidAreas.Push(area);
+	}
+	
+	if (ValidAreas.Length <= 0)
+	{
+		ValidAreas.Close();
+		return NULL_AREA;
+	}
+	
+	// Pick a random valid area
+	int areaCount = ValidAreas.Length;
+	CNavArea fallbackArea = ValidAreas.Get(GetRandomInt(0, areaCount - 1));
+	
+	ValidAreas.Close();
+	
+	if (redbots_manager_debug_actions.BoolValue)
+		PrintToServer("PickBuildAreaFallback: Found %i valid areas, selected area %x", areaCount, fallbackArea);
+	
+	return fallbackArea;
+}
+
 CNavArea PickBuildAreaPreRound(int client, float SentryRange = 1300.0)
 {
 	int iAreaCount = TheNavAreas.Count;
