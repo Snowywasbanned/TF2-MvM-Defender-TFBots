@@ -57,6 +57,12 @@ static Action CTFBotMvMEngineerIdle_Update(BehaviorAction action, int actor, flo
 		
 		m_aNestArea[actor] = PickBuildArea(actor);
 		
+		// If PickBuildArea failed, try fallback method
+		if (m_aNestArea[actor] == NULL_AREA)
+		{
+			m_aNestArea[actor] = PickBuildAreaFallback(actor);
+		}
+		
 		if (sentry != INVALID_ENT_REFERENCE && m_aNestArea[actor] != NULL_AREA)
 		{
 			g_bGoingToGrabBuilding[actor] = true;
@@ -151,11 +157,17 @@ static Action CTFBotMvMEngineerIdle_Update(BehaviorAction action, int actor, flo
 					}
 				}
 				
+				g_arrPluginBot[actor].bPathing = true;
 				//PrintToServer("Travel");
 			}
+			else
+			{
+				// No valid nest area - don't path to avoid going to 0,0,0
+				g_arrPluginBot[actor].bPathing = false;
+				if (redbots_manager_debug_actions.BoolValue)
+					PrintToServer("CTFBotMvMEngineerIdle_Update: No nest area, disabling pathing");
+			}
 		}
-		
-		g_arrPluginBot[actor].bPathing = true;
 		
 		return action.Continue();
 	}
@@ -172,6 +184,16 @@ static Action CTFBotMvMEngineerIdle_Update(BehaviorAction action, int actor, flo
 		m_ctFindNestHint[actor] = GetGameTime() + (GetRandomFloat(1.0, 2.0));
 		
 		m_aNestArea[actor] = PickBuildArea(actor);
+		
+		// If PickBuildArea failed, try fallback method
+		if (m_aNestArea[actor] == NULL_AREA)
+		{
+			m_aNestArea[actor] = PickBuildAreaFallback(actor);
+			if (m_aNestArea[actor] == NULL_AREA && redbots_manager_debug_actions.BoolValue)
+			{
+				PrintToServer("CTFBotMvMEngineerIdle_Update: PickBuildArea and fallback both failed for engineer %N", actor);
+			}
+		}
 	}
 	
 	if (bShouldAdvance)
