@@ -1521,6 +1521,92 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 	if (iAreaCount <= 0)
 		return NULL_AREA;
 	
+	float clientPos[3];
+	GetClientAbsOrigin(client, clientPos);
+	
+	// Priority 1: Check for hint entities (obj_sentrygun_hint or func_tfbot_hint with engineer hint)
+	ArrayList hintPositions = new ArrayList(3);
+	
+	// Check for obj_sentrygun_hint entities
+	int hint = -1;
+	while ((hint = FindEntityByClassname(hint, "obj_sentrygun_hint")) != -1)
+	{
+		float hintPos[3];
+		GetAbsOrigin(hint, hintPos);
+		hintPositions.PushArray(hintPos);
+	}
+	
+	// Check for func_tfbot_hint entities with team matching client (Red team = 2)
+	int tfbotHint = -1;
+	while ((tfbotHint = FindEntityByClassname(tfbotHint, "func_tfbot_hint")) != -1)
+	{
+		// Check if hint is for our team (Red = 2)
+		int hintTeam = GetEntProp(tfbotHint, Prop_Data, "m_iTeamNum");
+		if (hintTeam == 2 || hintTeam == 0) // 0 = any team, 2 = red team
+		{
+			float hintPos[3];
+			GetAbsOrigin(tfbotHint, hintPos);
+			hintPositions.PushArray(hintPos);
+		}
+	}
+	
+	// Priority 2: Check config for EngineerNestLocation (if available)
+	// Try to access config - if adtEngineerNestLocation is initialized and has data, use it
+	// We'll add these positions to hintPositions array
+	// Note: This requires the config to be properly loaded and initialized
+	
+	// If we found hints/config positions, use them
+	if (hintPositions.Length > 0)
+	{
+		// Find the nearest valid nav area to any hint position
+		float bestDistance = 999999.0;
+		CNavArea bestArea = NULL_AREA;
+		
+		for (int i = 0; i < hintPositions.Length; i++)
+		{
+			float hintPos[3];
+			hintPositions.GetArray(i, hintPos);
+			
+			// Find nearest nav area to this hint position
+			CTFNavArea hintArea = TheNavMesh.GetNearestNavArea(hintPos, false, 2000.0, false, true, TEAM_ANY);
+			
+			if (hintArea != NULL_AREA)
+			{
+				// Skip spawn areas
+				if (hintArea.HasAttributeTF(BLUE_SPAWN_ROOM) || hintArea.HasAttributeTF(RED_SPAWN_ROOM))
+					continue;
+				
+				// Skip blocked areas
+				if (hintArea.HasAttributeTF(BLOCKED))
+					continue;
+				
+				float areaCenter[3];
+				hintArea.GetCenter(areaCenter);
+				float distance = GetVectorDistance(clientPos, areaCenter);
+				
+				if (distance < bestDistance)
+				{
+					bestDistance = distance;
+					bestArea = hintArea;
+				}
+			}
+		}
+		
+		hintPositions.Close();
+		
+		if (bestArea != NULL_AREA)
+		{
+			if (redbots_manager_debug_actions.BoolValue)
+				PrintToServer("PickBuildArea: Found nav area from hint entities for client %N", client);
+			return bestArea;
+		}
+	}
+	else
+	{
+		hintPositions.Close();
+	}
+	
+	// Priority 3: Fallback to original bomb-based logic (but without requiring BOMB_DROP)
 	BombInfo_t bombinfo;
 	
 	if (!GetBombInfo(bombinfo)) 
@@ -1552,7 +1638,7 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 	//Areas visible to the bomb but not nescessarily forward of it.
 	ArrayList VisibleAreasAround  = new ArrayList();
 	
-	//Loop all nav areas
+	//Loop all nav areas - NO LONGER REQUIRING BOMB_DROP
 	for (int i = 0; i < iAreaCount; i++)
 	{	
 		CTFNavArea area = view_as<CTFNavArea>(TheNavAreas.Get(i));
@@ -1564,11 +1650,13 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 		if (area.HasAttributeTF(BLUE_SPAWN_ROOM) || area.HasAttributeTF(RED_SPAWN_ROOM))
 			continue;
 		
-		//TODO
-		//Better solution because this will break on all non mvm maps.
-		//Most likely areachable area
-		if (!area.HasAttributeTF(BOMB_DROP))
+		// Skip blocked areas
+		if (area.HasAttributeTF(BLOCKED))
 			continue;
+		
+		// REMOVED: No longer requiring BOMB_DROP attribute
+		// if (!area.HasAttributeTF(BOMB_DROP))
+		//	continue;
 		
 		float m_flBombTargetDistanceAtArea = GetTravelDistanceToBombTarget(area);
 		float m_flBombTargetDistanceAtBomb = GetTravelDistanceToBombTarget(bombArea);
@@ -1602,7 +1690,8 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 		}
 	}
 	
-	PrintToServer("PickBuildArea %i ForwardVisibleAreas | %i ForwardAreas | %i VisibleAreasAroundBomb", ForwardVisibleAreas.Length, ForwardAreas.Length, VisibleAreasAround.Length);
+	if (redbots_manager_debug_actions.BoolValue)
+		PrintToServer("PickBuildArea %i ForwardVisibleAreas | %i ForwardAreas | %i VisibleAreasAroundBomb", ForwardVisibleAreas.Length, ForwardAreas.Length, VisibleAreasAround.Length);
 	
 	CNavArea randomArea = NULL_AREA;
 	
