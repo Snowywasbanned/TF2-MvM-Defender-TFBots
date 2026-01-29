@@ -281,6 +281,8 @@ public void OnPluginStart()
 	RegAdminCmd("sm_purgebots", Command_RemoveAllBots, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_botmanager_stop", Command_StopManagingBots, ADMFLAG_GENERIC);
 	RegAdminCmd("sm_view_bot_upgrades", Command_ViewBotUpgrades, ADMFLAG_GENERIC);
+	RegConsoleCmd("sm_debug_engineer_nest", Command_DebugEngineerNest);
+	RegConsoleCmd("sm_debug_nest", Command_DebugEngineerNest);
 	
 	AddCommandListener(Listener_TournamentPlayerReadystate, "tournament_player_readystate");
 	
@@ -1665,6 +1667,100 @@ void ShowPlayerUpgrades(int client, int target, int slot)
 	}
 	
 	PrintToChat(client, "%N currently has %d credits.", target, TF2_GetCurrency(target));
+}
+
+public Action Command_DebugEngineerNest(int client, int args)
+{
+	if (!IsValidClientIndex(client))
+	{
+		ReplyToCommand(client, "Invalid client.");
+		return Plugin_Handled;
+	}
+	
+	// Set this client as the debug target
+	SetDebugNestClient(client);
+	PrintToChat(client, "[DEBUG] Engineer nest debugging enabled. All nest area operations will print to your chat.");
+	
+	// Find engineer bots
+	int engineerCount = 0;
+	int engineers[MAXPLAYERS];
+	
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && IsPlayerAlive(i) && TF2_GetPlayerClass(i) == TFClass_Engineer && g_bIsDefenderBot[i])
+		{
+			engineers[engineerCount] = i;
+			engineerCount++;
+		}
+	}
+	
+	if (engineerCount == 0)
+	{
+		PrintToChat(client, "[DEBUG] No engineer bots found.");
+		return Plugin_Handled;
+	}
+	
+	PrintToChat(client, "[DEBUG] Found %d engineer bot(s). Checking nest areas...", engineerCount);
+	
+	// Check for hint entities
+	int hintCount = 0;
+	int hint = -1;
+	while ((hint = FindEntityByClassname(hint, "obj_sentrygun_hint")) != -1)
+	{
+		hintCount++;
+		float hintPos[3];
+		hintPos = GetAbsOrigin(hint);
+		PrintToChat(client, "[DEBUG] Found obj_sentrygun_hint #%d at (%.1f, %.1f, %.1f)", hintCount, hintPos[0], hintPos[1], hintPos[2]);
+	}
+	
+	int tfbotHintCount = 0;
+	int tfbotHint = -1;
+	while ((tfbotHint = FindEntityByClassname(tfbotHint, "func_tfbot_hint")) != -1)
+	{
+		int hintTeam = GetEntProp(tfbotHint, Prop_Data, "m_iTeamNum");
+		if (hintTeam == 2 || hintTeam == 0)
+		{
+			tfbotHintCount++;
+			float hintPos[3];
+			hintPos = GetAbsOrigin(tfbotHint);
+			PrintToChat(client, "[DEBUG] Found func_tfbot_hint #%d (team %d) at (%.1f, %.1f, %.1f)", tfbotHintCount, hintTeam, hintPos[0], hintPos[1], hintPos[2]);
+		}
+	}
+	
+	if (hintCount == 0 && tfbotHintCount == 0)
+	{
+		PrintToChat(client, "[DEBUG] No hint entities found!");
+	}
+	
+	// Check each engineer's nest area
+	for (int i = 0; i < engineerCount; i++)
+	{
+		int eng = engineers[i];
+		PrintToChat(client, "[DEBUG] Engineer %N:", eng);
+		
+		// Call PickBuildArea and show results
+		CNavArea nestArea = PickBuildArea(eng);
+		
+		if (nestArea == NULL_AREA)
+		{
+			PrintToChat(client, "[DEBUG]   -> No nest area found (NULL_AREA)");
+		}
+		else
+		{
+			float areaCenter[3];
+			nestArea.GetCenter(areaCenter);
+			float clientPos[3];
+			GetClientAbsOrigin(eng, clientPos);
+			float distance = GetVectorDistance(clientPos, areaCenter);
+			
+			PrintToChat(client, "[DEBUG]   -> Nest area found!");
+			PrintToChat(client, "[DEBUG]      Center: (%.1f, %.1f, %.1f)", areaCenter[0], areaCenter[1], areaCenter[2]);
+			PrintToChat(client, "[DEBUG]      Distance from bot: %.1f units", distance);
+			PrintToChat(client, "[DEBUG]      Area ID: %d", nestArea.GetID());
+		}
+	}
+	
+	return Plugin_Handled;
 }
 
 int GetHumanAndDefenderBotCount(TFTeam team)
