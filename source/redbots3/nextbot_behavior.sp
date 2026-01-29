@@ -38,9 +38,13 @@ enum struct esPluginBot
 	
 	void SetPathGoalVector(const float vec[3])
 	{
-		//You can only set one or the other, not both
+		// You can only set one or the other, not both
 		this.iPathGoalEntity = -1;
-		this.vecPathGoal = vec;
+	
+		// Copy the vector components into our internal array instead of assigning a pointer.
+		this.vecPathGoal[0] = vec[0];
+		this.vecPathGoal[1] = vec[1];
+		this.vecPathGoal[2] = vec[2];
 	}
 	
 	void SetPathGoalEntity(int entity)
