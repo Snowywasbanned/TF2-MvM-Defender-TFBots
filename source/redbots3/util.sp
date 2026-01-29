@@ -1513,27 +1513,53 @@ float[] GetAbsAngles(int entity)
 	return vec;
 }
 
+static int g_iDebugNestClient = -1;
+
+void SetDebugNestClient(int client)
+{
+	g_iDebugNestClient = client;
+}
+
+void DebugPrintToChat(const char[] format, any ...)
+{
+	if (g_iDebugNestClient > 0 && g_iDebugNestClient <= MaxClients && IsClientInGame(g_iDebugNestClient))
+	{
+		char buffer[256];
+		VFormat(buffer, sizeof(buffer), format, 2);
+		PrintToChat(g_iDebugNestClient, "[NEST DEBUG] %s", buffer);
+	}
+}
+
 CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 {
 	int iAreaCount = TheNavAreas.Count;
 
 	//Check that this map has any nav areas
 	if (iAreaCount <= 0)
+	{
+		DebugPrintToChat("No nav areas found on map!");
 		return NULL_AREA;
+	}
 	
 	float clientPos[3];
 	GetClientAbsOrigin(client, clientPos);
 	
+	DebugPrintToChat("PickBuildArea called for %N at (%.1f, %.1f, %.1f)", client, clientPos[0], clientPos[1], clientPos[2]);
+	
 	// Priority 1: Check for hint entities (obj_sentrygun_hint or func_tfbot_hint with engineer hint)
 	ArrayList hintPositions = new ArrayList(3);
+	int objHintCount = 0;
+	int tfbotHintCount = 0;
 	
 	// Check for obj_sentrygun_hint entities
 	int hint = -1;
 	while ((hint = FindEntityByClassname(hint, "obj_sentrygun_hint")) != -1)
 	{
+		objHintCount++;
 		float hintPos[3];
 		hintPos = GetAbsOrigin(hint);
 		hintPositions.PushArray(hintPos);
+		DebugPrintToChat("Found obj_sentrygun_hint #%d at (%.1f, %.1f, %.1f)", objHintCount, hintPos[0], hintPos[1], hintPos[2]);
 	}
 	
 	// Check for func_tfbot_hint entities with team matching client (Red team = 2)
@@ -1544,11 +1570,15 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 		int hintTeam = GetEntProp(tfbotHint, Prop_Data, "m_iTeamNum");
 		if (hintTeam == 2 || hintTeam == 0) // 0 = any team, 2 = red team
 		{
+			tfbotHintCount++;
 			float hintPos[3];
 			hintPos = GetAbsOrigin(tfbotHint);
 			hintPositions.PushArray(hintPos);
+			DebugPrintToChat("Found func_tfbot_hint #%d (team %d) at (%.1f, %.1f, %.1f)", tfbotHintCount, hintTeam, hintPos[0], hintPos[1], hintPos[2]);
 		}
 	}
+	
+	DebugPrintToChat("Total hints found: %d obj_sentrygun_hint, %d func_tfbot_hint", objHintCount, tfbotHintCount);
 	
 	// Priority 2: Check config for EngineerNestLocation (if available)
 	// Try to access config - if adtEngineerNestLocation is initialized and has data, use it
@@ -1596,23 +1626,35 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 		
 		if (bestArea != NULL_AREA)
 		{
+			float bestCenter[3];
+			bestArea.GetCenter(bestCenter);
+			DebugPrintToChat("Selected nav area from hints: ID %d, center (%.1f, %.1f, %.1f), distance %.1f", 
+				bestArea.GetID(), bestCenter[0], bestCenter[1], bestCenter[2], bestDistance);
 			if (redbots_manager_debug_actions.BoolValue)
 				PrintToServer("PickBuildArea: Found nav area from hint entities for client %N", client);
 			return bestArea;
+		}
+		else
+		{
+			DebugPrintToChat("Found hints but no valid nav area nearby!");
 		}
 	}
 	else
 	{
 		hintPositions.Close();
+		DebugPrintToChat("No hint entities found, falling back to bomb-based logic");
 	}
 	
 	// Priority 3: Fallback to original bomb-based logic (but without requiring BOMB_DROP)
 	BombInfo_t bombinfo;
 	
 	if (!GetBombInfo(bombinfo)) 
-	{	
+	{
+		DebugPrintToChat("No bomb info, using pre-round logic");
 		return PickBuildAreaPreRound(client);
 	}
+	
+	DebugPrintToChat("Using bomb-based logic. Bomb at (%.1f, %.1f, %.1f)", bombinfo.vPosition[0], bombinfo.vPosition[1], bombinfo.vPosition[2]);
 	
 	float vecTargetPos[3];
 	vecTargetPos[0] = bombinfo.vPosition[0];
@@ -1690,14 +1732,40 @@ CNavArea PickBuildArea(int client, float SentryRange = 1300.0)
 		}
 	}
 	
+	DebugPrintToChat("Bomb-based search: %i ForwardVisibleAreas | %i ForwardAreas | %i VisibleAreasAroundBomb", 
+		ForwardVisibleAreas.Length, ForwardAreas.Length, VisibleAreasAround.Length);
+	
 	if (redbots_manager_debug_actions.BoolValue)
 		PrintToServer("PickBuildArea %i ForwardVisibleAreas | %i ForwardAreas | %i VisibleAreasAroundBomb", ForwardVisibleAreas.Length, ForwardAreas.Length, VisibleAreasAround.Length);
 	
 	CNavArea randomArea = NULL_AREA;
 	
-	if (ForwardVisibleAreas.Length     > 0) randomArea = ForwardVisibleAreas.Get(GetRandomInt(0, ForwardVisibleAreas.Length - 1));
-	else if (ForwardAreas.Length       > 0) randomArea =        ForwardAreas.Get(GetRandomInt(0, ForwardAreas.Length        - 1));
-	else if (VisibleAreasAround.Length > 0) randomArea =  VisibleAreasAround.Get(GetRandomInt(0, VisibleAreasAround.Length  - 1));
+	if (ForwardVisibleAreas.Length     > 0) 
+	{
+		randomArea = ForwardVisibleAreas.Get(GetRandomInt(0, ForwardVisibleAreas.Length - 1));
+		DebugPrintToChat("Selected from ForwardVisibleAreas");
+	}
+	else if (ForwardAreas.Length       > 0) 
+	{
+		randomArea = ForwardAreas.Get(GetRandomInt(0, ForwardAreas.Length - 1));
+		DebugPrintToChat("Selected from ForwardAreas");
+	}
+	else if (VisibleAreasAround.Length > 0) 
+	{
+		randomArea = VisibleAreasAround.Get(GetRandomInt(0, VisibleAreasAround.Length - 1));
+		DebugPrintToChat("Selected from VisibleAreasAround");
+	}
+	else
+	{
+		DebugPrintToChat("No valid areas found in bomb-based search!");
+	}
+	
+	if (randomArea != NULL_AREA)
+	{
+		float areaCenter[3];
+		randomArea.GetCenter(areaCenter);
+		DebugPrintToChat("Final area: ID %d, center (%.1f, %.1f, %.1f)", randomArea.GetID(), areaCenter[0], areaCenter[1], areaCenter[2]);
+	}
 	
 	ForwardVisibleAreas.Close();
 	ForwardAreas.Close();
